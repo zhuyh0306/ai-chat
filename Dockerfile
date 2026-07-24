@@ -1,7 +1,9 @@
 # ============================================
 # Stage 1: 依赖安装 & 构建
 # ============================================
-FROM node:22-alpine AS builder
+# BASE_IMAGE 默认用 docker.io，CI 中覆盖为 ACR 缓存镜像
+ARG BASE_IMAGE=node:22-alpine
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
 
@@ -27,7 +29,7 @@ RUN pnpm run build
 # ============================================
 # Stage 2: 生产运行时（最小镜像）
 # ============================================
-FROM node:22-alpine AS runner
+FROM ${BASE_IMAGE} AS runner
 
 WORKDIR /app
 

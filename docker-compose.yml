@@ -2,12 +2,8 @@ version: '3.8'
 
 services:
   my-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - MASTRA_API_URL=${MASTRA_API_URL}
-        - MASTRA_AGENT_ID=${MASTRA_AGENT_ID}
+    image: ${IMAGE:-my-app:latest}
+    pull_policy: always
     container_name: my-app
     restart: unless-stopped
     ports:

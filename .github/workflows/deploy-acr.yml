@@ -6,57 +6,43 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ================================================================
+  # Job 1: 构建镜像 & 推送到阿里云 ACR
+  # ================================================================
   build-and-push:
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.build-push.outputs.image }}
       version_tag: ${{ steps.build-push.outputs.version_tag }}
-      latest_tag: ${{ steps.build-push.outputs.latest_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # 0. 校验 Secret
-      # --------------------------------------------------
       - name: Validate Secrets
         run: |
           missing=""
-          if [ -z "${{ secrets.ACR_REGISTRY }}" ]; then
-            missing="$missing ACR_REGISTRY"
-          fi
-          if [ -z "${{ secrets.ACR_NAMESPACE }}" ]; then
-            missing="$missing ACR_NAMESPACE"
-          fi
-          if [ -z "${{ secrets.ACR_USERNAME }}" ]; then
-            missing="$missing ACR_USERNAME"
-          fi
-          if [ -z "${{ secrets.ACR_PASSWORD }}" ]; then
-            missing="$missing ACR_PASSWORD"
-          fi
+          for s in ACR_REGISTRY ACR_NAMESPACE ACR_USERNAME ACR_PASSWORD; do
+            if [ -z "$(printenv $s)" ]; then missing="$missing $s"; fi
+          done
           if [ -n "$missing" ]; then
             echo "❌ 缺少 GitHub Secret(s):$missing"
-            echo ""
-            echo "请在 GitHub 仓库 → Settings → Secrets and variables → Actions 中添加对应 Secret"
+            echo "请到 Settings → Secrets and variables → Actions 中添加"
             exit 1
           fi
-          echo "✅ 所有 Secret 已配置"
+          echo "✅ ACR Secret 已配置"
+        env:
+          ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
+          ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
 
-      # --------------------------------------------------
-      # 1. 登录阿里云 ACR（原生 docker login，确保 push 权限）
-      # --------------------------------------------------
-      - name: Login to ACR
+      - name: Login to Alibaba Cloud ACR
         run: |
           echo "${{ secrets.ACR_PASSWORD }}" | docker login \
             --username="${{ secrets.ACR_USERNAME }}" \
             --password-stdin \
             "${{ secrets.ACR_REGISTRY }}"
-        env:
-          DOCKER_CLI_EXPERIMENTAL: enabled
 
-      # --------------------------------------------------
-      # 2. 缓存 Node.js 基础镜像到 ACR（失败时回退到公开镜像）
-      # --------------------------------------------------
       - name: Cache Node base image to ACR
         id: cache-node
         run: |
@@ -65,7 +51,6 @@ jobs:
           ACR_BASE="${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/node:22-alpine"
           PUBLIC_BASE="node:22-alpine"
 
-          # 用 docker pull 检查 ACR 中是否已有缓存（比 manifest inspect 更可靠）
           if docker pull "$ACR_BASE" > /dev/null 2>&1; then
             echo "✅ Node 基础镜像已存在于 ACR"
             echo "base_image=$ACR_BASE" >> "$GITHUB_OUTPUT"
@@ -83,10 +68,10 @@ jobs:
               echo "✅ 拉取成功: $src"
               docker tag "$src" "$ACR_BASE"
               if docker push "$ACR_BASE" 2>/dev/null; then
-                echo "✅ 已缓存到 ACR: $ACR_BASE"
+                echo "✅ 缓存到 ACR: $ACR_BASE"
                 echo "base_image=$ACR_BASE" >> "$GITHUB_OUTPUT"
               else
-                echo "⚠️ 推送到 ACR 被拒绝（权限不足），将回退使用公开镜像: $PUBLIC_BASE"
+                echo "⚠️ 推送到 ACR 被拒，回退公开镜像: $PUBLIC_BASE"
                 echo "base_image=$PUBLIC_BASE" >> "$GITHUB_OUTPUT"
               fi
               exit 0
@@ -94,12 +79,9 @@ jobs:
             echo "  ⚠ 失败，尝试下一个..."
           done
 
-          echo "❌ 所有公开源均拉取失败"
+          echo "❌ 所有源均拉取失败"
           exit 1
 
-      # --------------------------------------------------
-      # 3. 构建 & 推送应用镜像到 ACR
-      # --------------------------------------------------
       - name: Build and Push App Image
         id: build-push
         run: |
@@ -123,21 +105,95 @@ jobs:
 
           echo "image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
           echo "version_tag=$VERSION_TAG" >> "$GITHUB_OUTPUT"
-          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
           echo "✅ 推送成功: $FULL_IMAGE"
-          echo "   版本标签: $VERSION_TAG"
-          echo "   最新标签: $LATEST_TAG"
 
-      - name: Summary
+  # ================================================================
+  # Job 2: SSH 到阿里云 ECS，拉取镜像并重启服务
+  # ================================================================
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Validate Deploy Secrets
         run: |
-          echo "## 📦 构建结果" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **镜像仓库**: ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/my-app" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **版本标签**: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **最新标签**: \`latest\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "服务器部署建议：" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`\`\`bash" >> "$GITHUB_STEP_SUMMARY"
-          echo "docker pull ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/my-app:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          missing=""
+          for s in SERVER_HOST SERVER_USER SERVER_SSH_KEY ACR_NAMESPACE; do
+            if [ -z "$(printenv $s)" ]; then missing="$missing $s"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "⚠️ 缺少部署 Secret(s):$missing，跳过自动部署"
+            echo "请到 Settings → Secrets and variables → Actions 添加："
+            echo "  SERVER_HOST    = 你的 ECS 公网 IP"
+            echo "  SERVER_USER    = 服务器用户名（如 root）"
+            echo "  SERVER_SSH_KEY = SSH 私钥（~/.ssh/id_rsa 内容）"
+            exit 1
+          fi
+          echo "✅ 部署 Secret 已配置"
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+
+      - name: Deploy to ECS via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+
+            # ---- 配置区 ----
+            ACR_REGISTRY="${{ secrets.ACR_REGISTRY }}"
+            ACR_NAMESPACE="${{ secrets.ACR_NAMESPACE }}"
+            ACR_USERNAME="${{ secrets.ACR_USERNAME }}"
+            ACR_PASSWORD="${{ secrets.ACR_PASSWORD }}"
+            IMAGE="$ACR_REGISTRY/$ACR_NAMESPACE/my-app"
+            VERSION="${{ needs.build-and-push.outputs.version_tag }}"
+
+            echo "🚀 开始部署..."
+            echo "   镜像: $IMAGE"
+            echo "   版本: $VERSION"
+
+            # 1. 登录 ACR
+            echo "📦 登录 ACR ..."
+            echo "$ACR_PASSWORD" | docker login \
+              --username="$ACR_USERNAME" \
+              --password-stdin \
+              "$ACR_REGISTRY"
+
+            # 2. 拉取最新镜像
+            echo "⬇️  拉取镜像 ..."
+            docker pull "$IMAGE:latest"
+
+            # 3. 重启服务（如果 docker-compose.yml 不在服务器上，需要先上传）
+            if [ -f docker-compose.yml ]; then
+              echo "🔄 重启服务 ..."
+              IMAGE="$IMAGE:latest" docker compose up -d --remove-orphans
+            else
+              echo "🔄 重启容器（docker compose 方式） ..."
+              docker stop my-app 2>/dev/null || true
+              docker rm my-app 2>/dev/null || true
+              docker run -d \
+                --name my-app \
+                --restart=unless-stopped \
+                -p 3000:3000 \
+                -e NODE_ENV=production \
+                -e PORT=3000 \
+                -e MASTRA_API_URL="${{ secrets.MASTRA_API_URL }}" \
+                -e MASTRA_AGENT_ID="${{ secrets.MASTRA_AGENT_ID }}" \
+                "$IMAGE:latest"
+            fi
+
+            # 4. 清理悬空镜像
+            echo "🧹 清理旧镜像 ..."
+            docker image prune -f
+
+            # 5. 验证
+            echo ""
+            echo "✅ 部署完成！等待 5 秒检查健康状态..."
+            sleep 5
+            docker ps --filter "name=my-app" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

@@ -8,6 +8,10 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build-push.outputs.image }}
+      version_tag: ${{ steps.build-push.outputs.version_tag }}
+      latest_tag: ${{ steps.build-push.outputs.latest_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -97,21 +101,43 @@ jobs:
       # 3. 构建 & 推送应用镜像到 ACR
       # --------------------------------------------------
       - name: Build and Push App Image
+        id: build-push
         run: |
           set -e
 
           BASE_IMAGE="${{ steps.cache-node.outputs.base_image }}"
           FULL_IMAGE="${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/my-app"
+          VERSION_TAG="$FULL_IMAGE:${{ github.sha }}"
+          LATEST_TAG="$FULL_IMAGE:latest"
 
           docker build \
             --build-arg BASE_IMAGE="$BASE_IMAGE" \
             --build-arg MASTRA_API_URL="${{ secrets.MASTRA_API_URL }}" \
             --build-arg MASTRA_AGENT_ID="${{ secrets.MASTRA_AGENT_ID }}" \
-            -t "$FULL_IMAGE:${{ github.sha }}" \
-            -t "$FULL_IMAGE:latest" \
+            -t "$VERSION_TAG" \
+            -t "$LATEST_TAG" \
             .
 
-          docker push "$FULL_IMAGE:${{ github.sha }}"
-          docker push "$FULL_IMAGE:latest"
+          docker push "$VERSION_TAG"
+          docker push "$LATEST_TAG"
+
+          echo "image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "version_tag=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
           echo "✅ 推送成功: $FULL_IMAGE"
+          echo "   版本标签: $VERSION_TAG"
+          echo "   最新标签: $LATEST_TAG"
+
+      - name: Summary
+        run: |
+          echo "## 📦 构建结果" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **镜像仓库**: ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/my-app" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **版本标签**: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **最新标签**: \`latest\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "服务器部署建议：" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`bash" >> "$GITHUB_STEP_SUMMARY"
+          echo "docker pull ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/my-app:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"

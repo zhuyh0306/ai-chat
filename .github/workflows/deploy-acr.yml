@@ -5,18 +5,44 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  # ACR 仓库地址（仓库地域/命名空间/镜像名），按实际修改
-  ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
-  ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
-  IMAGE_NAME: my-app
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # 0. 校验 Secret 是否配置
+      # --------------------------------------------------
+      - name: Validate Secrets
+        run: |
+          missing=""
+          if [ -z "${{ secrets.ACR_REGISTRY }}" ]; then
+            missing="$missing ACR_REGISTRY"
+          fi
+          if [ -z "${{ secrets.ACR_NAMESPACE }}" ]; then
+            missing="$missing ACR_NAMESPACE"
+          fi
+          if [ -z "${{ secrets.ACR_USERNAME }}" ]; then
+            missing="$missing ACR_USERNAME"
+          fi
+          if [ -z "${{ secrets.ACR_PASSWORD }}" ]; then
+            missing="$missing ACR_PASSWORD"
+          fi
+          if [ -n "$missing" ]; then
+            echo "❌ 缺少 GitHub Secret(s):$missing"
+            echo ""
+            echo "请在 GitHub 仓库 → Settings → Secrets and variables → Actions 中添加："
+            echo "  ACR_REGISTRY  = registry.cn-hangzhou.aliyuncs.com"
+            echo "  ACR_NAMESPACE = 你的命名空间名"
+            echo "  ACR_USERNAME  = 阿里云账号/子账号"
+            echo "  ACR_PASSWORD  = ACR 固定密码"
+            echo ""
+            echo "详情参考阿里云容器镜像服务 → 访问凭证"
+            exit 1
+          fi
+          echo "✅ 所有 Secret 已配置"
 
       # --------------------------------------------------
       # 1. 登录阿里云容器镜像服务
@@ -33,7 +59,7 @@ jobs:
       # --------------------------------------------------
       - name: Build and Push Docker Image
         run: |
-          FULL_IMAGE=$ACR_REGISTRY/$ACR_NAMESPACE/$IMAGE_NAME
+          FULL_IMAGE=${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/my-app
 
           docker build \
             --build-arg MASTRA_API_URL=${{ secrets.MASTRA_API_URL }} \
@@ -45,4 +71,4 @@ jobs:
           docker push $FULL_IMAGE:${{ github.sha }}
           docker push $FULL_IMAGE:latest
 
-          echo "IMAGE_TAG=$FULL_IMAGE:${{ github.sha }}" >> $GITHUB_ENV
+          echo "✅ 推送成功: $FULL_IMAGE"

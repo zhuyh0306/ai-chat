@@ -1,0 +1,48 @@
+name: Build & Push to ACR
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  # ACR 仓库地址（仓库地域/命名空间/镜像名），按实际修改
+  ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
+  ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE }}
+  IMAGE_NAME: my-app
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # 1. 登录阿里云容器镜像服务
+      # --------------------------------------------------
+      - name: Login to Alibaba Cloud ACR
+        uses: aliyun/acr-login@v1
+        with:
+          REGISTRY: ${{ secrets.ACR_REGISTRY }}
+          USERNAME: ${{ secrets.ACR_USERNAME }}
+          PASSWORD: ${{ secrets.ACR_PASSWORD }}
+
+      # --------------------------------------------------
+      # 2. 构建 Docker 镜像 & 推送到 ACR
+      # --------------------------------------------------
+      - name: Build and Push Docker Image
+        run: |
+          FULL_IMAGE=$ACR_REGISTRY/$ACR_NAMESPACE/$IMAGE_NAME
+
+          docker build \
+            --build-arg MASTRA_API_URL=${{ secrets.MASTRA_API_URL }} \
+            --build-arg MASTRA_AGENT_ID=${{ secrets.MASTRA_AGENT_ID }} \
+            -t $FULL_IMAGE:${{ github.sha }} \
+            -t $FULL_IMAGE:latest \
+            .
+
+          docker push $FULL_IMAGE:${{ github.sha }}
+          docker push $FULL_IMAGE:latest
+
+          echo "IMAGE_TAG=$FULL_IMAGE:${{ github.sha }}" >> $GITHUB_ENV

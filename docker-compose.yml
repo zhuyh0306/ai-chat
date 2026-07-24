@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  my-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - MASTRA_API_URL=${MASTRA_API_URL}
+        - MASTRA_AGENT_ID=${MASTRA_AGENT_ID}
+    container_name: my-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MASTRA_API_URL=${MASTRA_API_URL:-http://8.133.180.60:4111}
+      - MASTRA_AGENT_ID=${MASTRA_AGENT_ID:-assistant-agent}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

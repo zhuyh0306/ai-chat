@@ -6,12 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "ai-elements": "ai-elements",
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.18",
+    "@ai-sdk/react": "^4.0.38",
+    "@mastra/ai-sdk": "^1.6.2",
+    "@mastra/core": "^1.51.0",
+    "ai": "^7.0.35",
+    "ai-elements": "^1.9.0",
     "next": "16.2.11",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -1,95 +1,70 @@
-const MASTRA_API_URL = process.env.MASTRA_API_URL || "http://8.133.180.60:4111";
-const AGENT_ID = process.env.MASTRA_AGENT_ID || "assistant-agent";
+import { NextRequest } from "next/server";
 
-export async function POST(req: Request) {
-  const body = await req.json();
+const MASTRA_API = (process.env.MASTRA_API_URL || "http://localhost:4111").replace(/\/$/, "");
+const MASTRA_AGENT_ID = process.env.MASTRA_AGENT_ID || "assistant-agent";
 
-  // 将前端消息转为 Mastra 格式
-  const messages = (body.messages || []).map((msg: Record<string, unknown>) => ({
-    role: msg.role || "user",
-    content:
-      typeof msg.content === "string"
-        ? msg.content
-        : (msg.parts as Array<Record<string, unknown>>)
-            ?.filter((p) => p.type === "text")
-            .map((p) => p.text)
-            .join("") || "",
-  }));
-
-  const apiUrl = `${MASTRA_API_URL}/api/agents/${AGENT_ID}/generate`;
-  console.log(`[Mastra Proxy] → ${apiUrl}`);
-
+export async function POST(request: NextRequest) {
   try {
-    const mastraRes = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
-    });
+    const { messages } = await request.json();
 
-    if (!mastraRes.ok) {
-      const errorText = await mastraRes.text();
-      const errorMsg = `Error ${mastraRes.status}: ${errorText}`;
-      console.error(`[Mastra Proxy] ${errorMsg}`);
-
+    if (!messages || !Array.isArray(messages)) {
       return new Response(
-        `data: ${JSON.stringify({ type: "text", content: errorMsg })}\n\ndata: [DONE]\n\n`,
+        JSON.stringify({ error: "messages array is required" }),
         {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive",
-          },
-        }
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
       );
     }
 
-    const result = await mastraRes.json();
-    const responseText =
-      result.text || result.response || result.content || JSON.stringify(result);
+    // 标准化消息格式，确保 content 是字符串
+    const normalizedMessages = messages.map(
+      (msg: { role: string; content: string | Array<{ type: string; text?: string }> }) => ({
+        role: msg.role,
+        content: Array.isArray(msg.content)
+          ? msg.content
+              .filter((p: { type: string }) => p.type === "text")
+              .map((p: { text?: string }) => p.text || "")
+              .join("\n")
+          : String(msg.content || ""),
+      }),
+    );
 
-    console.log(`[Mastra Proxy] Response: ${responseText.slice(0, 200)}...`);
-
-    // 流式逐字返回（模拟打字效果）
-    const encoder = new TextEncoder();
-    const chars = [...responseText]; // 按字符分割（支持中文）
-
-    const stream = new ReadableStream({
-      async start(controller) {
-        // 逐字符推送（模拟流式效果）
-        const chunkSize = 3; // 每次推送 3 个字符
-        for (let i = 0; i < chars.length; i += chunkSize) {
-          const chunk = chars.slice(i, i + chunkSize).join("");
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "text", content: chunk })}\n\n`
-            )
-          );
-          await new Promise((r) => setTimeout(r, 15)); // 模拟延迟
-        }
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-        controller.close();
+    const response = await fetch(
+      `${MASTRA_API}/api/agents/${MASTRA_AGENT_ID}/stream`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: normalizedMessages }),
       },
-    });
+    );
 
-    return new Response(stream, {
+    if (!response.ok) {
+      const text = await response.text();
+      return new Response(JSON.stringify({ error: text }), {
+        status: response.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 直接透传 Mastra 的 SSE 流
+    return new Response(response.body, {
       headers: {
-        "Content-Type": "text/event-stream",
+        "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
       },
     });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Mastra Proxy] Exception: ${msg}`);
+  } catch (error) {
+    console.error("Chat API error:", error);
     return new Response(
-      `data: ${JSON.stringify({ type: "text", content: `Request failed: ${msg}` })}\n\ndata: [DONE]\n\n`,
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
       {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        },
-      }
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
     );
   }
 }

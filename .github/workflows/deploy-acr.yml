@@ -198,11 +198,12 @@ jobs:
             echo "⬇️  拉取后端镜像 ..."
             docker pull "$BACKEND_IMAGE:latest"
 
-            # 3. 确保项目目录存在且有 docker-compose.yml
-            cd /root/ai-chat || { echo "❌ 项目目录不存在"; exit 1; }
+            # 3. 确保项目目录存在
+            mkdir -p /root/ai-chat
+            cd /root/ai-chat
 
             # 如果没有 git clone，先克隆
-            if [ ! -f .git ]; then
+            if [ ! -d .git ]; then
               echo "📥 首次部署，克隆代码 ..."
               git clone https://github.com/zhuyh0306/ai-chat.git /tmp/ai-chat-tmp
               cp -rf /tmp/ai-chat-tmp/* .

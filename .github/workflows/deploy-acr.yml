@@ -243,6 +243,15 @@ jobs:
             echo "=== 服务状态 ==="
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 
+            # 诊断：若 nest-server 未就绪，打印关键容器日志，便于定位 502 原因
+            if ! docker ps --format '{{.Names}}' | grep -qx nest-server; then
+              echo "⚠️ nest-server 未运行，打印日志："
+              echo "----- nest-server 日志 -----"
+              docker logs --tail 60 nest-server 2>&1 || true
+              echo "----- postgres 日志 -----"
+              docker logs --tail 30 postgres 2>&1 || true
+            fi
+
             echo ""
             echo "✅ 部署完成 $(date '+%Y-%m-%d %H:%M:%S')"
             echo "   访问地址: http://$SERVER_HOST/"

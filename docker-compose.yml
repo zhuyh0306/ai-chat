@@ -70,9 +70,9 @@ services:
     image: ${ACR_REGISTRY:-registry.cn-shanghai.aliyuncs.com}/${ACR_NAMESPACE:-mastra_ai}/nest-server:${VERSION:-latest}
     container_name: nest-server
     restart: unless-stopped
-    # 仅 nginx 对内访问即可；如本地调试可临时放开 3001
-    # ports:
-    #   - "0.0.0.0:3001:3001"
+    # 放开 3001 便于外部直接访问后端 API / Swagger（同时仍走 nginx :80 入口）
+    ports:
+      - "0.0.0.0:3001:3001"
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -100,8 +100,7 @@ services:
         max-size: "10m"
         max-file: "3"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
   # ===================== 数据库 (PostgreSQL, Docker 镜像) =====================
   postgres:

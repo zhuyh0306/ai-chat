@@ -13,6 +13,9 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
       database: process.env.DB_DATABASE || 'mastra_app',
       autoLoadEntities: true,
       synchronize: true, // 开发环境自动同步表结构
+      // 数据库未就绪时自动重试，避免 nest-server 因短暂连不上 DB 而崩溃
+      retryAttempts: 10,
+      retryDelay: 3000,
     };
   }
 }

@@ -7,7 +7,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AppLogger } from './logger/app-logger';
-import { LoggerMiddleware } from './logger/logger.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -16,8 +15,7 @@ async function bootstrap() {
   const logger = app.get(AppLogger);
   app.useLogger(logger);
 
-  // 全局 HTTP 请求日志
-  app.use(new LoggerMiddleware(logger));
+  // 全局 HTTP 请求日志（已在 AppModule 中通过 MiddlewareConsumer 注册）
 
   // 全局 CORS
   app.enableCors({

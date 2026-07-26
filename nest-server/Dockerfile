@@ -8,6 +8,9 @@ WORKDIR /app
 # 启用 pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# bcrypt 为原生模块，alpine(musl) 无预编译二进制，需现场编译，先装编译工具
+RUN apk add --no-cache python3 make g++
+
 COPY package.json ./
 # 注意：nest-server 当前无 lockfile，使用普通 install；
 # 若后续生成了 pnpm-lock.yaml，可改为 `pnpm install --frozen-lockfile`

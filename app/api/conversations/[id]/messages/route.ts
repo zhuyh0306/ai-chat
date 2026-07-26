@@ -1,49 +1,72 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const MASTRA_API = process.env.MASTRA_API_URL || "http://localhost:4111";
+import { readData, writeData } from "@/src/lib/storage";
+import type { StoredConversation, StoredMessage } from "../../route";
 
 /**
  * GET /api/conversations/[id]/messages
- * 获取指定会话的历史消息
+ * 获取指定会话的所有消息
  */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const { id } = await params;
-    const res = await fetch(`${MASTRA_API}/memory/threads/${id}/messages`);
+  const convId = (await params).id;
+  const conversations = readData<StoredConversation[]>("conversations", []);
+  const conv = conversations.find((c) => c.id === convId);
 
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json({ error: text }, { status: res.status });
+  if (!conv) {
+    return NextResponse.json(
+      { error: "会话不存在" },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ messages: conv.messages });
+}
+
+/**
+ * POST /api/conversations/[id]/messages
+ * 追加一条新消息（流式响应结束后由前端调用保存 assistant 消息）
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const convId = (await params).id;
+    const body = await request.json();
+    const { role, content } = body;
+
+    if (!role || !content) {
+      return NextResponse.json(
+        { error: "role and content are required" },
+        { status: 400 },
+      );
     }
 
-    const data = await res.json();
-    const messages = Array.isArray(data) ? data : data.messages || [];
+    const conversations = readData<StoredConversation[]>("conversations", []);
+    const conv = conversations.find((c) => c.id === convId);
 
-    // 将 Mastra 格式转换为前端需要格式（过滤 system message）
-    const formatted = messages
-      .filter((m: { role: string }) => m.role !== "system")
-      .map(
-        (m: { role: string; content: string | Array<{ type: string; text: string; }> }) => ({
-          role: m.role,
-          content:
-            typeof m.content === "string"
-              ? m.content
-              : Array.isArray(m.content)
-                ? m.content
-                    .filter((p: { type: string }) => p.type === "text")
-                    .map((p: { text: string }) => p.text)
-                    .join("")
-                : "",
-        }),
+    if (!conv) {
+      return NextResponse.json(
+        { error: "会话不存在" },
+        { status: 404 },
       );
+    }
 
-    return NextResponse.json(formatted);
+    const msg: StoredMessage = {
+      role,
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    conv.messages.push(msg);
+    conv.updatedAt = new Date().toISOString();
+    writeData("conversations", conversations);
+
+    return NextResponse.json({ messages: conv.messages });
   } catch (e: unknown) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Failed to fetch messages" },
+      { error: e instanceof Error ? e.message : "Failed to save message" },
       { status: 500 },
     );
   }

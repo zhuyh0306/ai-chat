@@ -14,6 +14,7 @@ jobs:
     outputs:
       image: ${{ steps.build-push.outputs.image }}
       version_tag: ${{ steps.build-push.outputs.version_tag }}
+      backend_image: ${{ steps.build-backend.outputs.backend_image }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -82,7 +83,8 @@ jobs:
           echo "❌ 所有源均拉取失败"
           exit 1
 
-      - name: Build and Push App Image
+      # ---- 构建并推送前端镜像 (my-app) ----
+      - name: Build and Push App Image (frontend)
         id: build-push
         run: |
           set -e
@@ -96,6 +98,7 @@ jobs:
             --build-arg BASE_IMAGE="$BASE_IMAGE" \
             --build-arg MASTRA_API_URL="${{ secrets.MASTRA_API_URL }}" \
             --build-arg MASTRA_AGENT_ID="${{ secrets.MASTRA_AGENT_ID }}" \
+            --build-arg NEXT_PUBLIC_API_BASE=/api \
             -t "$VERSION_TAG" \
             -t "$LATEST_TAG" \
             .
@@ -105,6 +108,28 @@ jobs:
 
           echo "image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
           echo "version_tag=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+
+          echo "✅ 推送成功: $FULL_IMAGE"
+
+      # ---- 构建并推送后端镜像 (nest-server) ----
+      - name: Build and Push NestJS Image (backend)
+        id: build-backend
+        run: |
+          set -e
+
+          FULL_IMAGE="${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/nest-server"
+          VERSION_TAG="$FULL_IMAGE:${{ github.sha }}"
+          LATEST_TAG="$FULL_IMAGE:latest"
+
+          docker build \
+            -t "$VERSION_TAG" \
+            -t "$LATEST_TAG" \
+            ./nest-server
+
+          docker push "$VERSION_TAG"
+          docker push "$LATEST_TAG"
+
+          echo "backend_image=$FULL_IMAGE" >> "$GITHUB_OUTPUT"
 
           echo "✅ 推送成功: $FULL_IMAGE"
 
@@ -151,12 +176,14 @@ jobs:
             ACR_NAMESPACE="${{ secrets.ACR_NAMESPACE }}"
             ACR_USERNAME="${{ secrets.ACR_USERNAME }}"
             ACR_PASSWORD="${{ secrets.ACR_PASSWORD }}"
-            IMAGE="$ACR_REGISTRY/$ACR_NAMESPACE/my-app"
-            VERSION="${{ needs.build-and-push.outputs.version_tag }}"
+            FRONTEND_IMAGE="$ACR_REGISTRY/$ACR_NAMESPACE/my-app"
+            BACKEND_IMAGE="$ACR_REGISTRY/$ACR_NAMESPACE/nest-server"
 
-            echo "🚀 开始部署..."
-            echo "   镜像: $IMAGE"
-            echo "   版本: $VERSION"
+            echo "=========================================="
+            echo "  开始部署 $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "  前端: $FRONTEND_IMAGE:latest"
+            echo "  后端: $BACKEND_IMAGE:latest"
+            echo "=========================================="
 
             # 1. 登录 ACR
             echo "📦 登录 ACR ..."
@@ -166,34 +193,50 @@ jobs:
               "$ACR_REGISTRY"
 
             # 2. 拉取最新镜像
-            echo "⬇️  拉取镜像 ..."
-            docker pull "$IMAGE:latest"
+            echo "⬇️  拉取前端镜像 ..."
+            docker pull "$FRONTEND_IMAGE:latest"
+            echo "⬇️  拉取后端镜像 ..."
+            docker pull "$BACKEND_IMAGE:latest"
 
-            # 3. 重启服务（如果 docker-compose.yml 不在服务器上，需要先上传）
-            if [ -f docker-compose.yml ]; then
-              echo "🔄 重启服务 ..."
-              IMAGE="$IMAGE:latest" docker compose up -d --remove-orphans
+            # 3. 确保项目目录存在且有 docker-compose.yml
+            cd /root/ai-chat || { echo "❌ 项目目录不存在"; exit 1; }
+
+            # 如果没有 git clone，先克隆
+            if [ ! -f .git ]; then
+              echo "📥 首次部署，克隆代码 ..."
+              git clone https://github.com/zhuyh0306/ai-chat.git /tmp/ai-chat-tmp
+              cp -rf /tmp/ai-chat-tmp/* .
+              rm -rf /tmp/ai-chat-tmp
             else
-              echo "🔄 重启容器（docker compose 方式） ..."
-              docker stop my-app 2>/dev/null || true
-              docker rm my-app 2>/dev/null || true
-              docker run -d \
-                --name my-app \
-                --restart=unless-stopped \
-                -p 3000:3000 \
-                -e NODE_ENV=production \
-                -e PORT=3000 \
-                -e MASTRA_API_URL="${{ secrets.MASTRA_API_URL }}" \
-                -e MASTRA_AGENT_ID="${{ secrets.MASTRA_AGENT_ID }}" \
-                "$IMAGE:latest"
+              echo "🔄 更新代码 ..."
+              git stash || true
+              git pull origin main || true
+              git stash pop || true
             fi
 
-            # 4. 清理悬空镜像
+            # 4. 设置环境变量并启动服务（nginx + frontend + backend + postgres）
+            export DB_PASSWORD='${{ secrets.DB_PASSWORD || '123456' }}'
+            export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+            export MASTRA_API_URL='${{ secrets.MASTRA_API_URL }}'
+            export ACR_REGISTRY="$ACR_REGISTRY"
+            export ACR_NAMESPACE="$ACR_NAMESPACE"
+            export VERSION=latest
+
+            echo "🚀 启动服务 (docker-compose) ..."
+            docker compose up -d --remove-orphans
+
+            # 5. 清理悬空镜像
             echo "🧹 清理旧镜像 ..."
             docker image prune -f
 
-            # 5. 验证
+            # 6. 验证
             echo ""
-            echo "✅ 部署完成！等待 5 秒检查健康状态..."
-            sleep 5
-            docker ps --filter "name=my-app" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+            echo "⏳ 等待服务启动..."
+            sleep 15
+
+            echo "=== 服务状态 ==="
+            docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+
+            echo ""
+            echo "✅ 部署完成 $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "   访问地址: http://$SERVER_HOST/"

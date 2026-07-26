@@ -1,13 +1,45 @@
 version: '3.8'
 
 services:
-  my-app:
-    image: ${IMAGE:-my-app:latest}
-    pull_policy: always
-    container_name: my-app
+  # ===================== 反向代理 (Nginx，唯一对外入口 :80) =====================
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
     restart: unless-stopped
     ports:
-      - "0.0.0.0:3000:3000"
+      - "0.0.0.0:80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - my-app
+      - nest-server
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===================== 前端 (Next.js) =====================
+  my-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - MASTRA_API_URL=${MASTRA_API_URL:-http://8.133.180.60:4111}
+        - MASTRA_AGENT_ID=${MASTRA_AGENT_ID:-assistant-agent}
+        # 部署到 nginx 后后端同域，固定为 /api，无需再绑定 ECS IP
+        - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-/api}
+    image: ${ACR_REGISTRY:-registry.cn-shanghai.aliyuncs.com}/${ACR_NAMESPACE:-mastra_ai}/my-app:${VERSION:-latest}
+    container_name: my-app
+    restart: unless-stopped
+    # 仅 nginx 对内访问即可；如本地调试可临时放开 3000
+    # ports:
+    #   - "0.0.0.0:3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -24,3 +56,73 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    depends_on:
+      - nest-server
+
+  # ===================== 后端 (NestJS) =====================
+  nest-server:
+    build:
+      context: ./nest-server
+      dockerfile: Dockerfile
+    image: ${ACR_REGISTRY:-registry.cn-shanghai.aliyuncs.com}/${ACR_NAMESPACE:-mastra_ai}/nest-server:${VERSION:-latest}
+    container_name: nest-server
+    restart: unless-stopped
+    # 仅 nginx 对内访问即可；如本地调试可临时放开 3001
+    # ports:
+    #   - "0.0.0.0:3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      # 数据库：默认连同一 compose 内的 postgres 服务；
+      # 生产建议改用阿里云 RDS PostgreSQL，设置 DB_HOST 为 RDS 内网地址即可
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-123456}
+      - DB_DATABASE=${DB_DATABASE:-mastra_app}
+      # ⚠️ 务必改为强随机值，并保密
+      - JWT_SECRET=${JWT_SECRET:-change-me-strong-secret}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ===================== 数据库 (PostgreSQL, Docker 镜像) =====================
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-123456}
+      - POSTGRES_DB=${DB_DATABASE:-mastra_app}
+    # 仅暴露到本机回环地址，避免数据库公网暴露；
+    # 如需从外部初始化账号，可临时改为 "0.0.0.0:5432:5432"
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-mastra_app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:

@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AppBar,
   Toolbar,
@@ -10,13 +11,20 @@ import {
   Avatar,
   Badge,
   Tooltip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  Divider,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
   NotificationsOutlined as NotificationsIcon,
   LightModeOutlined as LightModeIcon,
+  Logout as LogoutIcon,
+  Person as PersonIcon,
 } from "@mui/icons-material";
 import Sidebar from "./Sidebar";
+import { useAuth } from "./AuthProvider";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -24,6 +32,16 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children, title = "AI Chat" }: AppLayoutProps) {
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const handleLogout = () => {
+    setAnchorEl(null);
+    logout();
+    router.replace("/login");
+  };
+
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       {/* 侧边栏：始终渲染，用 CSS 控制 PC/移动端显隐，避免水合闪烁 */}
@@ -80,17 +98,45 @@ export default function AppLayout({ children, title = "AI Chat" }: AppLayoutProp
               </Tooltip>
 
               <Tooltip title="User">
-                <Avatar
-                  sx={{
-                    width: 32,
-                    height: 32,
-                    bgcolor: "primary.main",
-                    fontSize: 14,
-                  }}
+                <IconButton
+                  size="small"
+                  onClick={(e) => setAnchorEl(e.currentTarget)}
+                  sx={{ p: 0 }}
                 >
-                  U
-                </Avatar>
+                  <Avatar
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      bgcolor: "primary.main",
+                      fontSize: 14,
+                    }}
+                  >
+                    {user?.username?.[0]?.toUpperCase() || "U"}
+                  </Avatar>
+                </IconButton>
               </Tooltip>
+
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={() => setAnchorEl(null)}
+                transformOrigin={{ horizontal: "right", vertical: "top" }}
+                anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+              >
+                <Box sx={{ px: 2, py: 1 }}>
+                  <Typography variant="subtitle2">{user?.username || "User"}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {user?.email || ""}
+                  </Typography>
+                </Box>
+                <Divider />
+                <MenuItem onClick={handleLogout}>
+                  <ListItemIcon>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  退出登录
+                </MenuItem>
+              </Menu>
             </Box>
           </Toolbar>
         </AppBar>

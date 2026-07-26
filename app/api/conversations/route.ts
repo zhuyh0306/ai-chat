@@ -1,62 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readData, writeData } from "@/src/lib/storage";
 
-const MASTRA_API = process.env.MASTRA_API_URL || "http://localhost:4111";
-const RESOURCE_ID = "default-user";
+export interface StoredMessage {
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}
+
+export interface StoredConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: StoredMessage[];
+}
 
 /**
  * GET /api/conversations
- * 获取所有会话（thread）列表
+ * 获取所有会话列表（不含消息内容）
  */
 export async function GET() {
-  try {
-    const res = await fetch(
-      `${MASTRA_API}/memory/threads?resourceId=${RESOURCE_ID}`,
+  const conversations = readData<StoredConversation[]>("conversations", []);
+  const summaries = conversations
+    .map(({ messages, ...rest }) => rest)
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json({ error: text }, { status: res.status });
-    }
-    const data = await res.json();
-    // 按更新时间倒序
-    const threads = Array.isArray(data) ? data : data.threads || [];
-    return NextResponse.json(threads);
-  } catch (e: unknown) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Failed to fetch threads" },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json(summaries);
 }
 
 /**
  * POST /api/conversations
- * 创建新会话（thread）
+ * 创建新会话
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const title = body.title || "New Chat";
+    const now = new Date().toISOString();
+    const id = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const res = await fetch(`${MASTRA_API}/memory/threads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        resourceId: RESOURCE_ID,
-        metadata: {},
-      }),
+    const newConv: StoredConversation = {
+      id,
+      title,
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    };
+
+    const conversations = readData<StoredConversation[]>("conversations", []);
+    conversations.push(newConv);
+    writeData("conversations", conversations);
+
+    return NextResponse.json({
+      id: newConv.id,
+      title: newConv.title,
+      createdAt: newConv.createdAt,
+      updatedAt: newConv.updatedAt,
     });
-
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json({ error: text }, { status: res.status });
-    }
-
-    const data = await res.json();
-    return NextResponse.json(data);
   } catch (e: unknown) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Failed to create thread" },
+      { error: e instanceof Error ? e.message : "Failed to create conversation" },
       { status: 500 },
     );
   }

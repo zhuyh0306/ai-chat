@@ -17,6 +17,7 @@ import {
   Settings as SettingsIcon,
   Info as InfoIcon,
   AutoAwesome as SparklesIcon,
+  SmartToy as AgentIcon,
 } from "@mui/icons-material";
 import { ReactNode } from "react";
 
@@ -30,6 +31,7 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { label: "AI Chat", path: "/", icon: <ChatIcon /> },
+  { label: "Agents", path: "/agents", icon: <AgentIcon /> },
   { label: "Dashboard", path: "/dashboard", icon: <SparklesIcon /> },
 ];
 

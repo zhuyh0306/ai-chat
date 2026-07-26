@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TypeOrmConfigService } from './typeorm.config';
+import { LoggerModule } from './logger/logger.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ModelsModule } from './models/models.module';
@@ -13,6 +14,7 @@ import { HealthController } from './health/health.controller';
     TypeOrmModule.forRootAsync({
       useClass: TypeOrmConfigService,
     }),
+    LoggerModule,
     AuthModule,
     UsersModule,
     ModelsModule,

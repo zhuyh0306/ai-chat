@@ -3,3 +3,5 @@
 allowBuilds:
   bcrypt: true
   unrs-resolver: true
+  # @scarf/scarf 是某依赖携带的遥测包，构建脚本非必需，显式忽略以消除 CI 报错
+  '@scarf/scarf': false

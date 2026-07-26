@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 nest-server/dist/
 nest-server/node_modules/
+# nest-server 运行日志
+/logs
+nest-server/logs/

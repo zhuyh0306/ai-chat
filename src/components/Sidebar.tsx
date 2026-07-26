@@ -18,8 +18,10 @@ import {
   Info as InfoIcon,
   AutoAwesome as SparklesIcon,
   SmartToy as AgentIcon,
+  MenuBook as MenuBookIcon,
 } from "@mui/icons-material";
 import { ReactNode } from "react";
+import { staticPages } from "@/src/config/staticPages";
 
 const DRAWER_WIDTH = 260;
 
@@ -35,6 +37,12 @@ const mainNavItems: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: <SparklesIcon /> },
 ];
 
+const staticNavItems: NavItem[] = staticPages.map((p) => ({
+  label: p.title,
+  path: `/static/${p.slug}`,
+  icon: <MenuBookIcon />,
+}));
+
 const secondaryNavItems: NavItem[] = [
   { label: "Settings", path: "/settings", icon: <SettingsIcon /> },
   { label: "About", path: "/about", icon: <InfoIcon /> },
@@ -48,6 +56,50 @@ export default function Sidebar() {
     if (path === "/") return pathname === "/";
     return pathname.startsWith(path);
   };
+
+  const renderItem = (item: NavItem) => (
+    <ListItemButton
+      key={item.path}
+      selected={isActive(item.path)}
+      onClick={() => router.push(item.path)}
+      sx={{
+        px: 1.5,
+        py: 1,
+        color: isActive(item.path) ? "primary.main" : "text.secondary",
+        "&.Mui-selected": {
+          backgroundColor: "primary.main",
+          color: "#fff",
+          "&:hover": {
+            backgroundColor: "primary.dark",
+          },
+          "& .MuiListItemIcon-root": {
+            color: "#fff",
+          },
+        },
+        "&:hover:not(.Mui-selected)": {
+          backgroundColor: "action.hover",
+        },
+      }}
+    >
+      <ListItemIcon
+        sx={{
+          minWidth: 40,
+          color: isActive(item.path) ? "inherit" : "text.secondary",
+        }}
+      >
+        {item.icon}
+      </ListItemIcon>
+      <ListItemText
+        primary={item.label}
+        sx={{
+          "& .MuiListItemText-primary": {
+            fontSize: 14,
+            fontWeight: isActive(item.path) ? 600 : 500,
+          },
+        }}
+      />
+    </ListItemButton>
+  );
 
   return (
     <Drawer
@@ -63,13 +115,7 @@ export default function Sidebar() {
     >
       {/* Logo 区域 */}
       <Toolbar sx={{ px: 2 }}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-          }}
-        >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Box
             sx={{
               width: 36,
@@ -119,49 +165,26 @@ export default function Sidebar() {
           Menu
         </Typography>
         <List dense disablePadding>
-          {mainNavItems.map((item) => (
-            <ListItemButton
-              key={item.path}
-              selected={isActive(item.path)}
-              onClick={() => router.push(item.path)}
-              sx={{
-                px: 1.5,
-                py: 1,
-                color: isActive(item.path) ? "primary.main" : "text.secondary",
-                "&.Mui-selected": {
-                  backgroundColor: "primary.main",
-                  color: "#fff",
-                  "&:hover": {
-                    backgroundColor: "primary.dark",
-                  },
-                  "& .MuiListItemIcon-root": {
-                    color: "#fff",
-                  },
-                },
-                "&:hover:not(.Mui-selected)": {
-                  backgroundColor: "action.hover",
-                },
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  minWidth: 40,
-                  color: isActive(item.path) ? "inherit" : "text.secondary",
-                }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.label}
-                sx={{
-                  "& .MuiListItemText-primary": {
-                    fontSize: 14,
-                    fontWeight: isActive(item.path) ? 600 : 500,
-                  },
-                }}
-              />
-            </ListItemButton>
-          ))}
+          {mainNavItems.map(renderItem)}
+        </List>
+
+        <Divider sx={{ my: 1.5 }} />
+
+        <Typography
+          variant="caption"
+          sx={{
+            px: 2,
+            pb: 0.5,
+            fontWeight: 600,
+            color: "text.secondary",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+          }}
+        >
+          学习资料
+        </Typography>
+        <List dense disablePadding>
+          {staticNavItems.map(renderItem)}
         </List>
 
         <Divider sx={{ my: 1.5 }} />
@@ -180,49 +203,7 @@ export default function Sidebar() {
           System
         </Typography>
         <List dense disablePadding>
-          {secondaryNavItems.map((item) => (
-            <ListItemButton
-              key={item.path}
-              selected={isActive(item.path)}
-              onClick={() => router.push(item.path)}
-              sx={{
-                px: 1.5,
-                py: 1,
-                color: isActive(item.path) ? "primary.main" : "text.secondary",
-                "&.Mui-selected": {
-                  backgroundColor: "primary.main",
-                  color: "#fff",
-                  "&:hover": {
-                    backgroundColor: "primary.dark",
-                  },
-                  "& .MuiListItemIcon-root": {
-                    color: "#fff",
-                  },
-                },
-                "&:hover:not(.Mui-selected)": {
-                  backgroundColor: "action.hover",
-                },
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  minWidth: 40,
-                  color: isActive(item.path) ? "inherit" : "text.secondary",
-                }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.label}
-                sx={{
-                  "& .MuiListItemText-primary": {
-                    fontSize: 14,
-                    fontWeight: isActive(item.path) ? 600 : 500,
-                  },
-                }}
-              />
-            </ListItemButton>
-          ))}
+          {secondaryNavItems.map(renderItem)}
         </List>
       </Box>
 

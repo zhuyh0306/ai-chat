@@ -44,3 +44,6 @@ nest-server/node_modules/
 # nest-server 运行日志
 /logs
 nest-server/logs/
+
+# 手动上传到服务器的静态文档（体积大，由 nginx 直接 serve，不进 git/镜像）
+/static-docs

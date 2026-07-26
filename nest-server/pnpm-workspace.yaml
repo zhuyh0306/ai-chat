@@ -1,0 +1,5 @@
+# pnpm v11 构建审批白名单（替代旧版 onlyBuiltDependencies）
+# 这些依赖需要运行安装脚本（bcrypt 需编译原生模块，unrs-resolver 需下载平台二进制）
+allowBuilds:
+  bcrypt: true
+  unrs-resolver: true

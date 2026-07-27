@@ -10,7 +10,9 @@ services:
       - "0.0.0.0:80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./static-docs:/usr/share/nginx/static-docs:ro
+      # 静态文档放在仓库外的绝对路径，避免 git clean / git pull 覆盖；
+      # 文件由人工 scp 到 ECS 的 /root/static-docs/，nginx 直接 serve /docs/
+      - /root/static-docs:/usr/share/nginx/static-docs:ro
     depends_on:
       - my-app
       - nest-server

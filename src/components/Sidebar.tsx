@@ -19,9 +19,11 @@ import {
   AutoAwesome as SparklesIcon,
   SmartToy as AgentIcon,
   MenuBook as MenuBookIcon,
+  Article as ArticleIcon,
 } from "@mui/icons-material";
 import { ReactNode } from "react";
 import { staticPages } from "@/src/config/staticPages";
+import { markdownDocs } from "@/src/config/markdownDocs";
 
 const DRAWER_WIDTH = 260;
 
@@ -41,6 +43,12 @@ const staticNavItems: NavItem[] = staticPages.map((p) => ({
   label: p.title,
   path: `/static/${p.slug}`,
   icon: <MenuBookIcon />,
+}));
+
+const markdownNavItems: NavItem[] = markdownDocs.map((p) => ({
+  label: p.title,
+  path: `/md/${p.slug}`,
+  icon: <ArticleIcon />,
 }));
 
 const secondaryNavItems: NavItem[] = [
@@ -186,6 +194,29 @@ export default function Sidebar() {
         <List dense disablePadding>
           {staticNavItems.map(renderItem)}
         </List>
+
+        {markdownNavItems.length > 0 && (
+          <>
+            <Divider sx={{ my: 1.5 }} />
+
+            <Typography
+              variant="caption"
+              sx={{
+                px: 2,
+                pb: 0.5,
+                fontWeight: 600,
+                color: "text.secondary",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              Markdown 文档
+            </Typography>
+            <List dense disablePadding>
+              {markdownNavItems.map(renderItem)}
+            </List>
+          </>
+        )}
 
         <Divider sx={{ my: 1.5 }} />
 

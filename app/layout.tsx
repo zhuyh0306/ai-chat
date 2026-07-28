@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import ThemeRegistry from "@/src/theme/ThemeRegistry";
 import { AuthProvider } from "@/src/components/AuthProvider";
 import "./globals.css";
+import "highlight.js/styles/github-dark.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

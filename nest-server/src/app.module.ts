@@ -8,6 +8,8 @@ import { UsersModule } from './users/users.module';
 import { ModelsModule } from './models/models.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
+import { EcommerceModule } from './ecommerce/ecommerce.module';
+import { InterviewModule } from './interview/interview.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -21,6 +23,8 @@ import { HealthController } from './health/health.controller';
     ModelsModule,
     ConversationsModule,
     MessagesModule,
+    EcommerceModule,
+    InterviewModule,
   ],
   controllers: [HealthController],
 })

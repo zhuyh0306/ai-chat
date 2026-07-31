@@ -12,6 +12,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main",
+    "seed:ecommerce": "ts-node scripts/seed-ecommerce.ts",
+    "import:interview-pdf": "python3 scripts/import-interview-pdf.py",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

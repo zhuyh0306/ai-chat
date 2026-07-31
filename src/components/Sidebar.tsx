@@ -20,6 +20,7 @@ import {
   SmartToy as AgentIcon,
   MenuBook as MenuBookIcon,
   Article as ArticleIcon,
+  Psychology as CoachIcon,
 } from "@mui/icons-material";
 import { ReactNode } from "react";
 import { staticPages } from "@/src/config/staticPages";
@@ -35,6 +36,7 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { label: "AI Chat", path: "/", icon: <ChatIcon /> },
+  { label: "面试教练", path: "/interview", icon: <CoachIcon /> },
   { label: "Agents", path: "/agents", icon: <AgentIcon /> },
   { label: "Dashboard", path: "/dashboard", icon: <SparklesIcon /> },
 ];
